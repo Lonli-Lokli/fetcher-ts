@@ -12,6 +12,7 @@ export default [
             '{projectRoot}/eslint.config.{js,cjs,mjs}',
             '{projectRoot}/vite.config.*',
           ],
+          "ignoredDependencies": ["cross-fetch"], // these libs will be omitted from checks
         },
       ],
     },
