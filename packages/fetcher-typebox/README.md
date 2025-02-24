@@ -32,7 +32,7 @@ pnpm add typebox-fetcher
 
 ```typescript
 import { Type } from '@sinclair/typebox';
-import { TypeboxFetcher } from 'typebox-fetcher';
+import { TypeboxFetcher } from '@lonli-lokli/fetcher-typebox';
 
 // Define your API response types
 type ApiResponse =
@@ -65,7 +65,7 @@ if (errors) {
 
 ```typescript
 import { Type } from '@sinclair/typebox';
-import { TypeboxFetcher, jsonExtractor, textExtractor } from 'typebox-fetcher';
+import { TypeboxFetcher, jsonExtractor, textExtractor } from '@lonli-lokli/fetcher-typebox';
 
 // Define your API response types
 type ApiResponse =

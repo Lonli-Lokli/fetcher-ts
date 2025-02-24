@@ -1,6 +1,1 @@
-export {
-  TypeboxFetcher,
-  defaultExtractor,
-  jsonExtractor,
-  textExtractor,
-} from './lib/fetcher-typebox.js';
+export * from './lib/fetcher-typebox.js';
