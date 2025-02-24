@@ -3,6 +3,7 @@
 # @lonli-lokli/fetcher-zod
 
 A type-safe HTTP client for TypeScript using Zod for runtime validation.
+
 [![npm version](https://img.shields.io/npm/v/@lonli-lokli/fetcher-zod.svg)](https://www.npmjs.com/package/@lonli-lokli/fetcher-zod)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 

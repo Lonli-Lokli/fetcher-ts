@@ -1,6 +1,7 @@
 # TypeBox Fetcher
 
 A strongly-typed fetch wrapper for TypeScript applications with runtime validation using TypeBox.
+
 [![npm version](https://img.shields.io/npm/v/@lonli-lokli/fetcher-typebox.svg)](https://www.npmjs.com/package/@lonli-lokli/fetcher-typebox)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
