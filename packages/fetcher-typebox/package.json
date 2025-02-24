@@ -1,0 +1,23 @@
+{
+  "name": "@lonli-lokli/fetcher-typebox",
+  "version": "0.2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!**/*.tsbuildinfo"
+  ],
+  "peerDependencies": {
+    "@sinclair/typebox": "^0.34.27"
+  }
+}
