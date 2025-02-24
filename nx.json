@@ -58,6 +58,9 @@
   "targetDefaults": {
     "test": {
       "dependsOn": ["^build", "^build", "^build", "^build"]
+    },
+    "release": {
+      "dependsOn": ["^build", "build"]
     }
   }
 }
