@@ -59,7 +59,7 @@
     "test": {
       "dependsOn": ["^build", "^build", "^build", "^build"]
     },
-    "release": {
+    "nx-release-publish": {
       "dependsOn": ["^build", "build"]
     }
   }
