@@ -1,10 +1,10 @@
 {
-  "name": "@lonli-lokli/fetcher-typebox",
+  "name": "@lonli-lokli/fetcher-zod",
   "version": "0.14.0",
   "type": "module",
-  "description": "A strongly-typed fetch wrapper for TypeScript applications with runtime validation using TypeBox",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
+  "description": "A strongly-typed fetch wrapper for TypeScript applications with runtime validation using TypeBox",
   "types": "./dist/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
@@ -18,7 +18,7 @@
     "typescript",
     "fetch",
     "api",
-    "typebox",
+    "zod",
     "validation",
     "http",
     "request",
@@ -34,7 +34,8 @@
     "dist",
     "!**/*.tsbuildinfo"
   ],
+  "dependencies": {},
   "peerDependencies": {
-    "@sinclair/typebox": "^0.34.27"
+    "zod": "^3.24.2"
   }
 }
