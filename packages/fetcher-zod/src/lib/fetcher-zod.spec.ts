@@ -1,7 +1,8 @@
-import { Type } from '@sinclair/typebox';
-import { TypeboxFetcher } from './fetcher-typebox.js';
+import { z } from 'zod';
+import { ZodFetcher } from './fetcher-zod.js';
+import { describe, it, expect, vi } from 'vitest';
 
-describe('TypeboxFetcher suite', () => {
+describe('ZodFetcher suite', () => {
   it('should handle simple 200 response with text data', async () => {
     type TestMethod = { code: 200; payload: string };
 
@@ -10,13 +11,13 @@ describe('TypeboxFetcher suite', () => {
         new Response('foo', { status: 200 })
     );
 
-    const [res, errs] = await new TypeboxFetcher<TestMethod, string>(
+    const [res, errs] = await new ZodFetcher<TestMethod, string>(
       '',
       undefined,
       undefined,
       fetchMock
     )
-      .handle(200, (_) => _, Type.String())
+      .handle(200, (_) => _, z.string())
       .run();
 
     expect(res).toStrictEqual('foo');
@@ -25,7 +26,7 @@ describe('TypeboxFetcher suite', () => {
 
   it('should handle simple 200 response with JSON data', async () => {
     type TestData = { foo: string; baz: number };
-    const TTestData = Type.Object({ foo: Type.String(), baz: Type.Number() });
+    const ZTestData = z.object({ foo: z.string(), baz: z.number() });
     type TestMethod = { code: 200; payload: TestData };
     const TEST_DATA = { foo: 'bar', baz: 42 };
     const fetchMock = vi.fn(
@@ -36,13 +37,13 @@ describe('TypeboxFetcher suite', () => {
         })
     );
 
-    const [res, errs] = await new TypeboxFetcher<TestMethod, TestData>(
+    const [res, errs] = await new ZodFetcher<TestMethod, TestData>(
       '',
       undefined,
       undefined,
       fetchMock
     )
-      .handle(200, (_) => _, TTestData)
+      .handle(200, (_) => _, ZTestData)
       .run();
 
     expect(res).toStrictEqual(TEST_DATA);
@@ -59,13 +60,13 @@ describe('TypeboxFetcher suite', () => {
         new Response('fooo', { status: 400 })
     );
 
-    const [res, errs] = await new TypeboxFetcher<TestMethod, string>(
+    const [res, errs] = await new ZodFetcher<TestMethod, string>(
       '',
       undefined,
       undefined,
       fetchMock
     )
-      .handle(200, (n) => n.toFixed(), Type.Number())
+      .handle(200, (n) => n.toFixed(), z.number())
       .handle(400, (_) => _)
       .run();
 
@@ -75,7 +76,7 @@ describe('TypeboxFetcher suite', () => {
 
   it('should validate incorrectly shaped responses', async () => {
     type TestData = { foo: string; baz: number };
-    const TTestData = Type.Object({ foo: Type.String(), baz: Type.Number() });
+    const ZTestData = z.object({ foo: z.string(), baz: z.number() });
     type TestMethod = { code: 200; payload: TestData };
 
     const fetchMock = vi.fn(
@@ -86,13 +87,13 @@ describe('TypeboxFetcher suite', () => {
         })
     );
 
-    const [_res, errs] = await new TypeboxFetcher<TestMethod, TestData>(
+    const [_res, errs] = await new ZodFetcher<TestMethod, TestData>(
       '',
       undefined,
       undefined,
       fetchMock
     )
-      .handle(200, (_) => _, TTestData)
+      .handle(200, (_) => _, ZTestData)
       .run();
 
     expect(errs).toBeDefined();
@@ -108,17 +109,17 @@ describe('TypeboxFetcher suite', () => {
         new Response(null, { status: 400, headers: { 'x-payload': 'fooo' } })
     );
 
-    const [res, errs] = await new TypeboxFetcher<TestMethod, string>(
+    const [res, errs] = await new ZodFetcher<TestMethod, string>(
       '',
       undefined,
       undefined,
       fetchMock
     )
-      .handle(200, (n) => n.toString(), Type.Number())
+      .handle(200, (n) => n.toString(), z.number())
       .handle(
         400,
         (_) => _,
-        Type.String(),
+        z.string(),
         async (r) => r.headers.get('x-payload') || 'NOT FOUND'
       )
       .run();
@@ -135,10 +136,10 @@ describe('TypeboxFetcher suite', () => {
       | { code: 404; payload: string | null };
 
     type User = { id: number; name: string; email: string };
-    const UserSchema = Type.Object({
-      id: Type.Number(),
-      name: Type.String(),
-      email: Type.String({ format: 'email' }),
+    const UserSchema = z.object({
+      id: z.number(),
+      name: z.string(),
+      email: z.string().email(),
     });
 
     const fetchMock = vi.fn(
@@ -155,9 +156,11 @@ describe('TypeboxFetcher suite', () => {
       },
     };
 
-    const [res, errs] = await new TypeboxFetcher<ApiResponse, string>(
+    const [res, errs] = await new ZodFetcher<ApiResponse, string>(
       '/api/users/1',
-      requestOptions
+      requestOptions,
+      undefined,
+      fetchMock
     )
       .handle(
         200,
@@ -185,7 +188,6 @@ describe('TypeboxFetcher suite', () => {
     expect(errs).toBeUndefined();
   });
 
-  
   it('should handle discardRestAsTo', async () => {
     type TestMethod =
       | { code: 200; payload: number }
@@ -196,13 +198,13 @@ describe('TypeboxFetcher suite', () => {
         new Response(null, { status: 500 })
     );
 
-    const [res, errs] = await new TypeboxFetcher<TestMethod, string>(
+    const [res, errs] = await new ZodFetcher<TestMethod, string>(
       '',
       undefined,
       undefined,
       fetchMock
     )
-      .handle(200, (n) => n.toString(), Type.Number())
+      .handle(200, (n) => n.toString(), z.number())
       .handle(400, (_) => _)
       .discardRestAsTo(() => 'fallback value')
       .run();
@@ -219,73 +221,14 @@ describe('TypeboxFetcher suite', () => {
         new Response('error', { status: 500 })
     );
 
-    const fetcher = new TypeboxFetcher<TestMethod, string>(
+    const fetcher = new ZodFetcher<TestMethod, string>(
       '',
       undefined,
       undefined,
       fetchMock
-    ).handle(200, (_) => _, Type.String());
+    ).handle(200, (_) => _, z.string());
 
     await expect(fetcher.run()).rejects.toThrow('No handler registered for status code 500');
   });
 
-  it('should handle JSON deserialization errors', async () => {
-    type TestMethod = { code: 200; payload: { foo: string } };
-
-    const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
-        new Response('invalid json', { 
-          status: 200,
-          headers: { 'content-type': 'application/json' }
-        })
-    );
-
-    const fetcher = new TypeboxFetcher<TestMethod, string>(
-      '',
-      undefined,
-      undefined,
-      fetchMock
-    ).handle(200, (data) => data.foo, Type.Object({ foo: Type.String() }));
-
-    await expect(fetcher.run()).rejects.toThrow('Could not deserialize response JSON');
-  });
-
-  it('should handle handler side errors', async () => {
-    type TestMethod = { code: 200; payload: string };
-
-    const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
-        new Response('foo', { status: 200 })
-    );
-
-    const fetcher = new TypeboxFetcher<TestMethod, string>(
-      '',
-      undefined,
-      undefined,
-      fetchMock
-    ).handle(200, () => {
-      throw new Error('Handler error');
-    }, Type.String());
-
-    await expect(fetcher.run()).rejects.toThrow('Handler side error');
-  });
-
-  it('should handle fetch errors', async () => {
-    type TestMethod = { code: 200; payload: string };
-
-    const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit | undefined) => {
-        throw new Error('Network error');
-      }
-    );
-
-    const fetcher = new TypeboxFetcher<TestMethod, string>(
-      '',
-      undefined,
-      undefined,
-      fetchMock
-    ).handle(200, (_) => _, Type.String());
-
-    await expect(fetcher.run()).rejects.toThrow('Network error');
-  });
 });

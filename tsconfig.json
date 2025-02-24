@@ -5,6 +5,9 @@
   "references": [
     {
       "path": "./packages/fetcher-typebox"
-    }    
+    },
+    {
+      "path": "./packages/fetcher-zod"
+    }
   ]
 }
