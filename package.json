@@ -6,11 +6,6 @@
     "nx": "nx",
     "lint": "nx lint",
     "test": "nx test",
-    "build": "run-s build:js build:copy build:check",
-    "build:copy": "shx cp ./packages/fetcher-typebox/package.json ./build/package.json && shx cp ./README.md ./build/README.md",
-    "build:js": "tsup",
-    "build:check": "attw --pack build",
-    "typecheck": "nx typecheck",
     "release": "nx release --skip-publish"
   },
   "private": true,
