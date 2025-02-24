@@ -32,7 +32,6 @@
   },
   "files": [
     "dist",
-    "src",
     "!**/*.tsbuildinfo"
   ],
   "peerDependencies": {
