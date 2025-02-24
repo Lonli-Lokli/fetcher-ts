@@ -143,7 +143,7 @@ describe('TypeboxFetcher suite', () => {
 
     const fetchMock = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
-        new Response(null, { status: 400, headers: { 'x-payload': 'fooo' } })
+        new Response('testcode', { status: 400, headers: { 'x-payload': 'fooo' } })
     );
 
     // Custom request options
@@ -156,8 +156,10 @@ describe('TypeboxFetcher suite', () => {
     };
 
     const [res, errs] = await new TypeboxFetcher<ApiResponse, string>(
-      '/api/users/1',
-      requestOptions
+      '',
+      requestOptions,
+      undefined,
+      fetchMock
     )
       .handle(
         200,
@@ -181,11 +183,10 @@ describe('TypeboxFetcher suite', () => {
       )
       .run();
 
-    expect(res).toStrictEqual('fooo');
+    expect(res).toStrictEqual(`Bad request: testcode`);
     expect(errs).toBeUndefined();
   });
 
-  
   it('should handle discardRestAsTo', async () => {
     type TestMethod =
       | { code: 200; payload: number }
@@ -226,7 +227,9 @@ describe('TypeboxFetcher suite', () => {
       fetchMock
     ).handle(200, (_) => _, Type.String());
 
-    await expect(fetcher.run()).rejects.toThrow('No handler registered for status code 500');
+    await expect(fetcher.run()).rejects.toThrow(
+      'No handler registered for status code 500'
+    );
   });
 
   it('should handle JSON deserialization errors', async () => {
@@ -234,9 +237,9 @@ describe('TypeboxFetcher suite', () => {
 
     const fetchMock = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
-        new Response('invalid json', { 
+        new Response('invalid json', {
           status: 200,
-          headers: { 'content-type': 'application/json' }
+          headers: { 'content-type': 'application/json' },
         })
     );
 
@@ -247,7 +250,9 @@ describe('TypeboxFetcher suite', () => {
       fetchMock
     ).handle(200, (data) => data.foo, Type.Object({ foo: Type.String() }));
 
-    await expect(fetcher.run()).rejects.toThrow('Could not deserialize response JSON');
+    await expect(fetcher.run()).rejects.toThrow(
+      'Could not deserialize response JSON'
+    );
   });
 
   it('should handle handler side errors', async () => {
@@ -263,9 +268,13 @@ describe('TypeboxFetcher suite', () => {
       undefined,
       undefined,
       fetchMock
-    ).handle(200, () => {
-      throw new Error('Handler error');
-    }, Type.String());
+    ).handle(
+      200,
+      () => {
+        throw new Error('Handler error');
+      },
+      Type.String()
+    );
 
     await expect(fetcher.run()).rejects.toThrow('Handler side error');
   });

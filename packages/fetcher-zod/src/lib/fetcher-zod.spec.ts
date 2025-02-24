@@ -144,7 +144,7 @@ describe('ZodFetcher suite', () => {
 
     const fetchMock = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
-        new Response(null, { status: 400, headers: { 'x-payload': 'fooo' } })
+        new Response('testcode', { status: 400, headers: { 'x-payload': 'fooo' } })
     );
 
     // Custom request options
@@ -157,7 +157,7 @@ describe('ZodFetcher suite', () => {
     };
 
     const [res, errs] = await new ZodFetcher<ApiResponse, string>(
-      '/api/users/1',
+      '',
       requestOptions,
       undefined,
       fetchMock
@@ -184,7 +184,7 @@ describe('ZodFetcher suite', () => {
       )
       .run();
 
-    expect(res).toStrictEqual('fooo');
+    expect(res).toStrictEqual('Bad request: testcode');
     expect(errs).toBeUndefined();
   });
 
