@@ -1,0 +1,9 @@
+{
+  "name": "fetcher-typebox",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/fetcher-typebox/src",
+  "projectType": "library",
+  "tags": [],
+  "// targets": "to see all targets run: nx show project @lonli-lokli/fetcher-typebox --web",
+  "targets": {}
+}
