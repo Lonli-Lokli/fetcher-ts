@@ -32,13 +32,13 @@ jobs:
 
       - name: Build package
         run: npm run build
+        run: npm run deploy
         shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
           NPM_CONFIG_PROVENANCE: false
           
       - name: Deploy package
-        run: npm run deploy
         uses: JS-DevTools/npm-publish@v3
         with:
           package: build
