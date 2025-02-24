@@ -7,6 +7,8 @@ Type-safe HTTP clients for TypeScript with runtime validation.
 [![npm version](https://img.shields.io/npm/v/@lonli-lokli/fetcher-ts.svg)](https://www.npmjs.com/package/@lonli-lokli/fetcher-ts)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
+> Note: This project was inspired by the original `fetcher-ts` package, but has been extended with additional validation libraries and features.
+
 ## 📦 Packages
 
 | Package | Description | Documentation |
