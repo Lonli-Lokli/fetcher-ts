@@ -21,6 +21,8 @@ export default defineConfig({
   build: {
     outDir: './dist',
     emptyOutDir: true,
+    // Let the library user control minification in their own bundler
+    minify: false,
     sourcemap: true,
     reportCompressedSize: true,
     commonjsOptions: {
@@ -38,6 +40,7 @@ export default defineConfig({
     rollupOptions: {
       // External packages that should not be bundled into your library.
       external: ['zod', 'cross-fetch'],
+      
     },
   },
   test: {
