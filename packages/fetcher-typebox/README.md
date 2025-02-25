@@ -10,6 +10,7 @@ A strongly-typed fetch wrapper for TypeScript applications with runtime validati
 - ✅ Full TypeScript support with strict type checking
 - ✅ Runtime validation of API responses using TypeBox
 - ✅ Handle different response status codes with appropriate types
+- ✅ Safe promise handling with `safeRun()` to avoid unhandled rejections
 - ✅ Customizable response extraction (JSON, text, headers, etc.)
 - ✅ Elegant chain-based API for defining response handlers
 - ✅ Compatible with standard `fetch`
@@ -61,6 +62,39 @@ if (errors) {
 }
 ```
 
+### Safe Run with Error Handling
+
+```typescript
+import { Type } from '@sinclair/typebox';
+import { TypeboxFetcher } from '@lonli-lokli/fetcher-typebox';
+
+// Define your API response types
+type ApiResponse =
+  | { code: 200; payload: { name: string; age: number } }
+  | { code: 400; payload: string };
+
+// Define TypeBox schema for validation
+const UserSchema = Type.Object({
+  name: Type.String(),
+  age: Type.Number(),
+});
+
+// Make the request with safe error handling
+const result = await new TypeboxFetcher<ApiResponse, string>(
+  '/api/user/123'
+)
+  .handle(200, (user) => `Hello, ${user.name}!`, UserSchema)
+  .handle(400, (errorMessage) => `Error: ${errorMessage}`)
+  .safeRun();
+
+// Handle the result safely without try/catch
+if (result.status === 'ok') {
+  console.log(result.data); // "Hello, Name!" 
+} else {
+  console.error('Request failed:', result.error);
+}
+```
+
 ### Advanced Usage
 
 ```typescript
@@ -92,16 +126,16 @@ const requestOptions = {
 };
 
 // Create a fetcher with multiple handlers
-const fetcher = new TypeboxFetcher<ApiResponse, string>(
+const fetcher = new TypeboxFetcher<ApiResponse, User>(
   '/api/users/1',
   requestOptions
 )
-  .handle(200, (user) => `User found: ${user.name} (${user.email})`, UserSchema)
-  .handle(400, (message) => `Bad request: ${message}`)
-  .handle(401, (message) => `Authentication required: ${message}`)
+  .handle(200, (user) => user, UserSchema)
+  .handle(400, (message) => { throw new Error(`Bad request: ${message}`); })
+  .handle(401, (message) => { throw new Error(`Authentication required: ${message}`); })
   .handle(
     404,
-    () => 'User not found',
+    () => { throw new Error('User not found'); },
     undefined,
     async (response) => {
       // Custom extractor that gets an error ID from headers
@@ -113,17 +147,15 @@ const fetcher = new TypeboxFetcher<ApiResponse, string>(
     (response) => new Error(`Unhandled status code: ${response.status}`)
   );
 
-// Execute the request
-try {
-  const [result, validationErrors] = await fetcher.run();
+// Get only the user's name safely
+const nameResult = await fetcher
+  .mapSafe(user => user.name)
+  .safeRun();
 
-  if (validationErrors) {
-    console.error('Response validation failed:', validationErrors);
-  } else {
-    console.log(result);
-  }
-} catch (error) {
-  console.error('Request failed:', error);
+if (nameResult.status === 'ok') {
+  console.log('User name:', nameResult.data);
+} else {
+  console.error('Failed to get user name:', nameResult.error.message);
 }
 ```
 
@@ -183,7 +215,73 @@ Returns a Promise of a tuple containing:
 - The processed result
 - Validation errors (if any)
 
+May throw exceptions for network errors or unhandled status codes.
+
+##### `safeRun()`
+
+Execute the fetch request and safely process the response without throwing exceptions.
+
+Returns a Promise of a `SafeResult<To>`:
+
+```typescript
+type SafeResult<T> = OkResult<T> | ErrorResult;
+
+type OkResult<T> = {
+  readonly status: 'ok';
+  readonly data: T;
+};
+
+type ErrorResult = {
+  readonly status: 'error';
+  readonly error: Error;
+};
+```
+
+##### `mapSafe<B>(fn: (a: To) => B)`
+
+Transform the result of this fetcher while maintaining safe error handling.
+
+- `fn`: Transformation function for the successful result
+- Returns a new TypeboxFetcher that transforms the successful result
+
+### SafeResult Types
+
+#### `SafeResult<T>`
+
+A union type representing either a successful result or an error.
+
+```typescript
+type SafeResult<T> = OkResult<T> | ErrorResult;
+```
+
+#### `OkResult<T>`
+
+Represents a successful operation with data.
+
+```typescript
+type OkResult<T> = {
+  readonly status: 'ok';
+  readonly data: T;
+};
+```
+
+#### `ErrorResult`
+
+Represents a failed operation with an error.
+
+```typescript
+type ErrorResult = {
+  readonly status: 'error';
+  readonly error: Error;
+};
+```
+
 ### Utility Functions
+
+#### Helper Functions
+
+- `ok<T>(data: T)`: Creates an OkResult with the provided data
+- `err(error: Error)`: Creates an ErrorResult with the provided error
 
 #### Extractors
 
@@ -195,6 +293,7 @@ Returns a Promise of a tuple containing:
 
 - `HandlerNotSetError`: Thrown when no handler is registered for a status code
 - `JsonDeserializationError`: Thrown when JSON deserialization fails
+- `ValidationError`: Represents validation failures from TypeBox
 
 ## License
 
