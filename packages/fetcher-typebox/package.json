@@ -1,6 +1,6 @@
 {
   "name": "@lonli-lokli/fetcher-typebox",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "type": "module",
   "description": "A strongly-typed fetch wrapper for TypeScript applications with runtime validation using TypeBox",
   "main": "./dist/index.js",
