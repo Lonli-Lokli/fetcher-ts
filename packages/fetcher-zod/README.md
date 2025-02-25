@@ -195,6 +195,7 @@ constructor(
 - **`handle<Code>(code, handler, schema?, extractor?)`**: Register a handler for a specific status code
 - **`discardRestAsError(handler)`**: Handle all unhandled status codes by throwing an error
 - **`discardRestAsTo(handler)`**: Handle all unhandled status codes by returning a default value
+- **`map<B>(fn)`**: Transform the result of this fetcher to a new type
 - **`run()`**: Execute the HTTP request and process the response
 
 ## License

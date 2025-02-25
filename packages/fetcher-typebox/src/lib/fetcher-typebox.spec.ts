@@ -1,5 +1,6 @@
 import { Type } from '@sinclair/typebox';
 import { TypeboxFetcher } from './fetcher-typebox.js';
+import { describe, it, expect, vi } from 'vitest';
 
 describe('TypeboxFetcher suite', () => {
   it('should handle simple 200 response with text data', async () => {
@@ -296,5 +297,81 @@ describe('TypeboxFetcher suite', () => {
     ).handle(200, (_) => _, Type.String());
 
     await expect(fetcher.run()).rejects.toThrow('Network error');
+  });
+
+  it('should handle map transformation', async () => {
+    type TestMethod = { code: 200; payload: string };
+
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
+        new Response('foo', { status: 200 })
+    );
+
+    const fetcher = new TypeboxFetcher<TestMethod, string>(
+      '',
+      undefined,
+      undefined,
+      fetchMock
+    ).handle(200, (_) => _, Type.String());
+
+    const mappedFetcher = fetcher.map(str => str.toUpperCase());
+    
+    const [res, errs] = await mappedFetcher.run();
+
+    expect(res).toStrictEqual('FOO');
+    expect(errs).toBeUndefined();
+  });
+
+  it('should handle map transformation with multiple handlers', async () => {
+    type TestMethod = 
+      | { code: 200; payload: string }
+      | { code: 400; payload: number };
+
+    const input = 'foo';
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
+        new Response(input, { status: 200 })
+    );
+
+    const fetcher = new TypeboxFetcher<TestMethod, string>(
+      '',
+      undefined,
+      undefined,
+      fetchMock
+    )
+      .handle(200, str => `OK: ${str}`, Type.String())
+      .handle(400, num => `Error: ${num}`, Type.Number());
+
+    const mappedFetcher = fetcher.map(result => result.length);
+    
+    const [res, errs] = await mappedFetcher.run();
+
+    expect(res).toStrictEqual(`OK: ${input}`.length); // Length of "OK: foo"
+    expect(errs).toBeUndefined();
+  });
+
+  it('should handle map transformation with discardRestAsTo', async () => {
+    type TestMethod = { code: 200; payload: string };
+
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
+        new Response('foo', { status: 500 })
+    );
+
+    const fetcher = new TypeboxFetcher<TestMethod, string>(
+      '',
+      undefined,
+      undefined,
+      fetchMock
+    )
+      .handle(200, str => str, Type.String())
+      .discardRestAsTo(() => 'fallback');
+
+    const mappedFetcher = fetcher.map(str => str.toUpperCase());
+    
+    const [res, errs] = await mappedFetcher.run();
+
+    expect(res).toStrictEqual('FALLBACK');
+    expect(errs).toBeUndefined();
   });
 });

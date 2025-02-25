@@ -231,4 +231,78 @@ describe('ZodFetcher suite', () => {
     await expect(fetcher.run()).rejects.toThrow('No handler registered for status code 500');
   });
 
+  it('should handle map transformation', async () => {
+    type TestMethod = { code: 200; payload: string };
+
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
+        new Response('foo', { status: 200 })
+    );
+
+    const fetcher = new ZodFetcher<TestMethod, string>(
+      '',
+      undefined,
+      undefined,
+      fetchMock
+    ).handle(200, (_) => _, z.string());
+
+    const mappedFetcher = fetcher.map(str => str.toUpperCase());
+    
+    const [res, errs] = await mappedFetcher.run();
+
+    expect(res).toStrictEqual('FOO');
+    expect(errs).toBeUndefined();
+  });
+
+  it('should handle map transformation with multiple handlers', async () => {
+    type TestMethod = 
+      | { code: 200; payload: string }
+      | { code: 400; payload: number };
+
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
+        new Response('foo', { status: 200 })
+    );
+
+    const fetcher = new ZodFetcher<TestMethod, string>(
+      '',
+      undefined,
+      undefined,
+      fetchMock
+    )
+      .handle(200, str => `Success: ${str}`, z.string())
+      .handle(400, num => `Error: ${num}`, z.number());
+
+    const mappedFetcher = fetcher.map(result => result.length);
+    
+    const [res, errs] = await mappedFetcher.run();
+
+    expect(res).toStrictEqual(`Success: foo`.length);
+    expect(errs).toBeUndefined();
+  });
+
+  it('should handle map transformation with discardRestAsTo', async () => {
+    type TestMethod = { code: 200; payload: string };
+
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
+        new Response('foo', { status: 500 })
+    );
+
+    const fetcher = new ZodFetcher<TestMethod, string>(
+      '',
+      undefined,
+      undefined,
+      fetchMock
+    )
+      .handle(200, str => str, z.string())
+      .discardRestAsTo(() => 'fallback');
+
+    const mappedFetcher = fetcher.map(str => str.toUpperCase());
+    
+    const [res, errs] = await mappedFetcher.run();
+
+    expect(res).toStrictEqual('FALLBACK');
+    expect(errs).toBeUndefined();
+  });
 });
