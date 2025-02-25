@@ -21,6 +21,7 @@ export default defineConfig({
   build: {
     outDir: './dist',
     emptyOutDir: true,
+    sourcemap: true,
     reportCompressedSize: true,
     commonjsOptions: {
       transformMixedEsModules: true,
@@ -36,7 +37,7 @@ export default defineConfig({
     },
     rollupOptions: {
       // External packages that should not be bundled into your library.
-      external: [],
+      external: ['zod', 'cross-fetch'],
     },
   },
   test: {
