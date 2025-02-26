@@ -66,7 +66,14 @@ if (errors) {
 
 ```typescript
 import { Type } from '@sinclair/typebox';
-import { TypeboxFetcher } from '@lonli-lokli/fetcher-typebox';
+import { 
+  TypeboxFetcher, 
+  ValidationError, 
+  JsonDeserializationError, 
+  HandlerNotSetError,
+  NetworkError,
+  ParsingError
+} from '@lonli-lokli/fetcher-typebox';
 
 // Define your API response types
 type ApiResponse =
@@ -91,7 +98,146 @@ const result = await new TypeboxFetcher<ApiResponse, string>(
 if (result.status === 'ok') {
   console.log(result.data); // "Hello, Name!" 
 } else {
-  console.error('Request failed:', result.error);
+  // You can check for specific error types
+  if (result.error instanceof ValidationError) {
+    console.error('Schema validation failed:', result.error.message);
+  } else if (result.error instanceof JsonDeserializationError) {
+    console.error('Failed to parse JSON response:', result.error.message);
+  } else if (result.error instanceof HandlerNotSetError) {
+    console.error(`No handler for status code ${result.error.message}`);
+  } else if (result.error instanceof NetworkError) {
+    console.error('Network request failed:', result.error.message);
+  } else if (result.error instanceof ParsingError) {
+    console.error('Error processing response data:', result.error.message);
+  } else {
+    console.error('Request failed:', result.error.message);
+  }
+}
+```
+
+### Comprehensive SafeRun Example
+
+```typescript
+import { Type } from '@sinclair/typebox';
+import { 
+  TypeboxFetcher, 
+  ValidationError, 
+  JsonDeserializationError, 
+  HandlerNotSetError,
+  NetworkError,
+  ParsingError
+} from '@lonli-lokli/fetcher-typebox';
+
+// Define your API response types
+type ApiResponse =
+  | { code: 200; payload: User }
+  | { code: 400; payload: ErrorResponse }
+  | { code: 404; payload: null };
+
+// Define your data types and schemas
+type User = { id: number; name: string; email: string };
+type ErrorResponse = { message: string; code: string };
+
+const UserSchema = Type.Object({
+  id: Type.Number(),
+  name: Type.String(),
+  email: Type.String({ format: 'email' }),
+});
+
+const ErrorResponseSchema = Type.Object({
+  message: Type.String(),
+  code: Type.String(),
+});
+
+async function fetchUserSafely(userId: number) {
+  const result = await new TypeboxFetcher<ApiResponse, User | string | null>(
+    `/api/users/${userId}`,
+    { 
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    }
+  )
+    .handle(200, user => user, UserSchema)
+    .handle(400, error => `Error: ${error.message} (${error.code})`, ErrorResponseSchema)
+    .handle(404, () => null)
+    // Handle any other status code with a custom error
+    .discardRestAsError(response => 
+      new Error(`Unexpected status code: ${response.status}`)
+    )
+    .safeRun();
+
+  // Handle all possible outcomes
+  if (result.status === 'ok') {
+    if (result.data === null) {
+      console.log('User not found');
+      return null;
+    } else if (typeof result.data === 'string') {
+      console.log('Request error:', result.data);
+      return null;
+    } else {
+      console.log('User found:', result.data);
+      return result.data;
+    }
+  } else {
+    // Type-specific error handling
+    if (result.error instanceof ValidationError) {
+      console.error('Response validation failed:', result.error.message);
+      // You can access the original validation error
+      const originalError = result.error.validationErrors;
+      console.error('Validation details:', originalError.message);
+    } else if (result.error instanceof JsonDeserializationError) {
+      console.error('Failed to parse JSON response:', result.error.message);
+    } else if (result.error instanceof HandlerNotSetError) {
+      console.error(`No handler defined for status code: ${result.error.message}`);
+    } else if (result.error instanceof NetworkError) {
+      console.error('Network connection failed:', result.error.message);
+      // Handle offline state or retry logic
+    } else if (result.error instanceof ParsingError) {
+      console.error('Error processing response data:', result.error.message);
+      // Handle data processing errors
+    } else {
+      console.error('Request failed:', result.error.message);
+    }
+    return null;
+  }
+}
+
+// Usage
+const user = await fetchUserSafely(123);
+```
+
+### Error Handling with Offline Detection
+
+```typescript
+import { 
+  TypeboxFetcher, 
+  NetworkError 
+} from '@lonli-lokli/fetcher-typebox';
+
+async function fetchWithOfflineDetection<T>(
+  url: string, 
+  options: RequestInit = {}
+): Promise<T | null> {
+  const result = await new TypeboxFetcher<{ code: 200; payload: T }, T>(url, options)
+    .handle(200, data => data)
+    .safeRun();
+  
+  if (result.status === 'error') {
+    if (result.error instanceof NetworkError) {
+      // Handle offline state
+      const isOffline = !navigator.onLine;
+      if (isOffline) {
+        console.log('Device is offline. Please check your connection.');
+        // Maybe update UI to show offline state
+        // Or queue request for later when back online
+      } else {
+        console.error('Network request failed despite being online:', result.error.message);
+      }
+    }
+    return null;
+  }
+  
+  return result.data;
 }
 ```
 
@@ -237,6 +383,14 @@ type ErrorResult = {
 };
 ```
 
+The `error` in `ErrorResult` can be one of:
+- `ValidationError`: When TypeBox schema validation fails
+- `JsonDeserializationError`: When JSON parsing fails
+- `HandlerNotSetError`: When no handler is defined for a status code
+- `NetworkError`: When the network request fails (offline, DNS failure, etc.)
+- `ParsingError`: When there's an error processing the response data
+- Other standard `Error` types for custom errors
+
 ##### `mapSafe<B>(fn: (a: To) => B)`
 
 Transform the result of this fetcher while maintaining safe error handling.
@@ -294,6 +448,8 @@ type ErrorResult = {
 - `HandlerNotSetError`: Thrown when no handler is registered for a status code
 - `JsonDeserializationError`: Thrown when JSON deserialization fails
 - `ValidationError`: Represents validation failures from TypeBox
+- `NetworkError`: Thrown when the network request fails (offline, DNS failure, etc.)
+- `ParsingError`: Thrown when there's an error processing the response data
 
 ## License
 

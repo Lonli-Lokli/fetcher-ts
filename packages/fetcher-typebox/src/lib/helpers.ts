@@ -28,7 +28,7 @@ export const ok = <T>(data: T): OkResult<T> => ({
   data,
 });
 
-export const err = (error: Error): ErrorResult => ({
+export const err = (error: FetcherError): ErrorResult => ({
   status: 'error',
   error,
 });

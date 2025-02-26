@@ -6,6 +6,9 @@ import {
   HandlerNotSetError,
   JsonDeserializationError,
   ValidationError,
+  NetworkError,
+  ParsingError,
+  FetcherError,
 } from './errors.js';
 import { jsonExtractor, textExtractor, unsafeCoerce,  ok, err } from './helpers.js';
 import {
@@ -213,7 +216,9 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
    */
   async run(): Promise<[To, Error | undefined]> {
     try {
-      const response = await this.fetch(this.input, this.init);
+      const response = await this.fetch(this.input, this.init).catch(error => {
+        throw new NetworkError(`Network request failed: ${error.message}`, error);
+      });
 
       const status = response.status as TResult['code'];
       const triplet = this.handlers.get(status);
@@ -239,7 +244,7 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
             return [handler(body), undefined];
           } catch (error) {
             return Promise.reject(
-              new Error(`Handler side error, details: ${error}`)
+              new ParsingError(`Handler side error, details: ${error}`)
             );
           }
         } catch (jsonError) {
@@ -297,6 +302,11 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
 
       return ok(data);
     } catch (error) {
+      // Preserve our custom error types
+      if (error instanceof FetcherError ) {
+        return err(error);
+      }
+      // Wrap unknown errors
       return err(error instanceof Error ? error : new Error(String(error)));
     }
   }
