@@ -1,74 +1,39 @@
-import { fetch as crossFetch } from 'cross-fetch';
+import crossFetch from 'cross-fetch';
 import { TypeCheck, TypeCompiler } from '@sinclair/typebox/compiler';
 import { Static, TSchema } from '@sinclair/typebox';
 import { Value as TypeValue } from '@sinclair/typebox/value';
+import {
+  HandlerNotSetError,
+  JsonDeserializationError,
+  ValidationError,
+} from './errors.js';
+import { jsonExtractor, textExtractor, unsafeCoerce,  ok, err } from './helpers.js';
+import {
+  Data,
+  Extractor,
+  Fetch,
+  Handled,
+  HandlersMap,
+  StrictSchema,
+  Result,
+  SafeResult,
+  ParsedResult
+} from './shapes.js';
 
-type Fetch = typeof fetch;
-
-export type Result<Code extends number, A> = { code: Code; payload: A };
-
-export type Extractor<TResult, Code extends number> = (
-  response: Response
-) => Promise<Data<TResult, Code>>;
-
-type Handled<T, Code extends number> = T extends Result<infer C, infer D>
-  ? C extends Code
-    ? never
-    : Result<C, D>
-  : never;
-
-export type Data<T, Code extends number> = T extends Result<infer C, infer D>
-  ? C extends Code
-    ? D
-    : never
-  : never;
-
-type StrictSchema<
-  T extends TSchema,
-  TResult extends Result<any, any>,
-  TCode extends number
-> = Static<T> extends Data<TResult, TCode> ? T : never;
-
-type HandlersMap<TResult extends Result<any, any>, To> = Map<
-  TResult['code'],
-  [
-    (data: Data<TResult, TResult['code']>) => To,
-    StrictSchema<TSchema, TResult, TResult['code']> | undefined,
-    Extractor<TResult, TResult['code']>
-  ]
->;
-
-export const defaultExtractor = (response: Response) => {
-  const contentType = response.headers.get('content-type');
-
-  return contentType?.includes('application/json')
-    ? response.json()
-    : response.text();
-};
-
-export type ValidationResult<T> = [T, Error[] | undefined];
-
-export interface Validator<T> {
-  decode(data: unknown): ValidationResult<T>;
-}
-
-export const jsonExtractor = (response: Response) => response.json();
-
-export const textExtractor = (response: Response) => response.text();
 
 /**
  * A type-safe HTTP client with TypeBox validation
- * 
+ *
  * @template TResult The union type of possible API responses (e.g., Result<200, User> | Result<404, string>)
  * @template To The return type after processing the response
- * 
+ *
  * @example
  * ```typescript
- * type ApiResponse = 
+ * type ApiResponse =
  *   | Result<200, User>
  *   | Result<400, string>
  *   | Result<404, null>;
- * 
+ *
  * const fetcher = new TypeboxFetcher<ApiResponse, string>('/api/users/1')
  *   .handle(200, user => `Found: ${user.name}`, UserSchema)
  *   .handle(400, error => `Error: ${error}`)
@@ -83,17 +48,17 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
 
   /**
    * Creates a new TypeboxFetcher instance
-   * 
+   *
    * @param input The URL or Request object to fetch
    * @param init Optional fetch init options
    * @param parser Custom parser function (defaults to TypeBox validation)
    * @param fetch Custom fetch implementation (defaults to cross-fetch)
-   * 
+   *
    * @example
    * ```typescript
    * const fetcher = new TypeboxFetcher<ApiResponse, User>(
    *   'https://api.example.com/users/1',
-   *   { 
+   *   {
    *     method: 'GET',
    *     headers: { 'Authorization': 'Bearer token123' }
    *   }
@@ -120,10 +85,10 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
    * @param schema Optional TypeBox schema for validation
    * @param extractor Optional custom response extractor
    * @returns A new TypeboxFetcher with the handler registered
-   * 
+   *
    * @example
    * ```typescript
-   * fetcher.handle(200, 
+   * fetcher.handle(200,
    *   user => `User: ${user.name}`,
    *   Type.Object({
    *     id: Type.Number(),
@@ -149,7 +114,7 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
    *
    * @param restErrorHandler Function that returns an Error for unhandled status codes
    * @returns A new TypeboxFetcher with all status codes handled
-   * 
+   *
    * @example
    * ```typescript
    * fetcher.discardRestAsError(
@@ -170,7 +135,7 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
    *
    * @param restToHandler Function that returns a default value for unhandled status codes
    * @returns A new TypeboxFetcher with all status codes handled
-   * 
+   *
    * @example
    * ```typescript
    * fetcher.discardRestAsTo(
@@ -188,11 +153,11 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
 
   /**
    * Transform the result of this fetcher
-   * 
+   *
    * @template B The new return type
    * @param fn Transformation function
    * @returns A new TypeboxFetcher with transformed output
-   * 
+   *
    * @example
    * ```typescript
    * const userFetcher = fetcher.handle(200, user => user, UserSchema);
@@ -207,16 +172,19 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
       this.parser,
       this.fetch
     );
-    
+
     // Copy handlers with transformed output
-    for (const [code, [handler, schema, extractor]] of this.handlers.entries()) {
+    for (const [
+      code,
+      [handler, schema, extractor],
+    ] of this.handlers.entries()) {
       (newFetcher.handlers as any).set(code, [
         (data: any) => fn(handler(data)),
         schema,
         extractor,
       ]);
     }
-    
+
     // Transform rest handlers if they exist
     if (this.restToHandler) {
       newFetcher.restToHandler = () => fn(this.restToHandler!());
@@ -224,7 +192,7 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
     if (this.restErrorHandler) {
       newFetcher.restErrorHandler = this.restErrorHandler;
     }
-    
+
     return newFetcher;
   }
 
@@ -232,7 +200,7 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
    * Execute the HTTP request and process the response
    *
    * @returns A promise of a tuple containing the result and any validation errors
-   * 
+   *
    * @example
    * ```typescript
    * const [user, errors] = await fetcher.run();
@@ -296,17 +264,49 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
       return Promise.reject(error);
     }
   }
+
+  /**
+   * Execute the HTTP request and safely process the response
+   *
+   * Returns a SafeResult type that represents success or failure
+   * without throwing exceptions.
+   *
+   * @returns A promise that resolves to a SafeResult containing
+   *          either the data or an error
+   *
+   * @example
+   * ```typescript
+   * const result = await fetcher.safeRun();
+   *
+   * if (result.status === 'ok') {
+   *   const data = result.data;
+   *   // Handle successful case with validated data
+   * } else {
+   *   // Handle any error case
+   *   console.error(result.error);
+   * }
+   * ```
+   */
+  async safeRun(): Promise<SafeResult<To>> {
+    try {
+      const [data, validationError] = await this.run();
+
+      if (validationError) {
+        return err(new ValidationError(validationError));
+      }
+
+      return ok(data);
+    } catch (error) {
+      return err(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
 }
 
 const compiledSchemas = new Map<TSchema, TypeCheck<TSchema>>();
 
-type ParsedResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: Error };
-
 /**
  * Default parser for TypeBox schemas
- * 
+ *
  * @param schema The TypeBox schema to validate against
  * @param value The value to validate
  * @returns A parsed result with either the validated data or an error
@@ -337,29 +337,10 @@ const defaultParser = <T extends TSchema>(
   };
 };
 
-// Errors and extractors
-/**
- * Error thrown when no handler is registered for a status code
- */
-export class HandlerNotSetError extends Error {
-  constructor(code: number) {
-    super(`No handler registered for status code ${code}`);
-    this.name = 'HandlerNotSetError';
-  }
-}
+export const defaultExtractor = (response: Response) => {
+  const contentType = response.headers.get('content-type');
 
-/**
- * Error thrown when JSON deserialization fails
- */
-export class JsonDeserializationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'JsonDeserializationError';
-  }
-}
-
-function identity<A>(a: A): A {
-  return a;
-}
-
-const unsafeCoerce: <A, B>(a: A) => B = identity as any;
+  return contentType?.includes('application/json')
+    ? jsonExtractor(response)
+    : textExtractor(response);
+};

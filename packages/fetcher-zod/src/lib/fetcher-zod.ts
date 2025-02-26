@@ -1,88 +1,17 @@
-import { fetch as crossFetch } from 'cross-fetch';
+import crossFetch  from 'cross-fetch';
 import { z } from 'zod';
+import { jsonExtractor, ok, textExtractor, unsafeCoerce, err } from './helpers.js';
+import { Data, Extractor, Fetch, Handled, HandlersMap, ParsedResult, Result, SafeResult, StrictSchema } from './shapes.js';
+import { HandlerNotSetError, JsonDeserializationError, ValidationError } from './errors.js';
 
-type Fetch = typeof fetch;
-
-export type Result<Code extends number, A> = { code: Code; payload: A };
-
-export type Extractor<TResult, Code extends number> = (
-  response: Response
-) => Promise<Data<TResult, Code>>;
-
-type Handled<T, Code extends number> = T extends Result<infer C, infer D>
-  ? C extends Code
-    ? never
-    : Result<C, D>
-  : never;
-
-export type Data<T, Code extends number> = T extends Result<infer C, infer D>
-  ? C extends Code
-    ? D
-    : never
-  : never;
-
-type StrictSchema<
-  T extends z.ZodType<any>,
-  TResult extends Result<any, any>,
-  TCode extends number
-> = z.infer<T> extends Data<TResult, TCode> ? T : never;
-
-type HandlersMap<TResult extends Result<any, any>, To> = Map<
-  TResult['code'],
-  [
-    (data: Data<TResult, TResult['code']>) => To,
-    StrictSchema<z.ZodType<any>, TResult, TResult['code']> | undefined,
-    Extractor<TResult, TResult['code']>
-  ]
->;
 
 export const defaultExtractor = (response: Response) => {
   const contentType = response.headers.get('content-type');
 
   return contentType?.includes('application/json')
-    ? response.json()
-    : response.text();
+    ? jsonExtractor(response)
+    : textExtractor(response);
 };
-
-export type ValidationResult<T> = [T, Error[] | undefined];
-
-export interface Validator<T> {
-  decode(data: unknown): ValidationResult<T>;
-}
-
-/**
- * Extracts JSON data from a response
- * 
- * @param response The fetch Response object
- * @returns A promise that resolves to the JSON data
- * 
- * @example
- * ```typescript
- * fetcher.handle(200, 
- *   data => data,
- *   z.object({ id: z.number() }),
- *   jsonExtractor
- * )
- * ```
- */
-export const jsonExtractor = (response: Response) => response.json();
-
-/**
- * Extracts text data from a response
- * 
- * @param response The fetch Response object
- * @returns A promise that resolves to the text data
- * 
- * @example
- * ```typescript
- * fetcher.handle(200, 
- *   text => text,
- *   z.string(),
- *   textExtractor
- * )
- * ```
- */
-export const textExtractor = (response: Response) => response.text();
 
 /**
  * A type-safe HTTP client with Zod validation
@@ -324,11 +253,43 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
       return Promise.reject(error);
     }
   }
-}
 
-type ParsedResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: Error };
+  /**
+   * Execute the HTTP request and safely process the response
+   *
+   * Returns a SafeResult type that represents success or failure
+   * without throwing exceptions.
+   *
+   * @returns A promise that resolves to a SafeResult containing
+   *          either the data or an error
+   *
+   * @example
+   * ```typescript
+   * const result = await fetcher.safeRun();
+   *
+   * if (result.status === 'ok') {
+   *   const data = result.data;
+   *   // Handle successful case with validated data
+   * } else {
+   *   // Handle any error case
+   *   console.error(result.error);
+   * }
+   * ```
+   */
+  async safeRun(): Promise<SafeResult<To>> {
+    try {
+      const [data, validationError] = await this.run();
+
+      if (validationError) {
+        return err(new ValidationError(validationError));
+      }
+
+      return ok(data);
+    } catch (error) {
+      return err(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+}
 
 /**
  * Default parser for Zod schemas
@@ -355,29 +316,3 @@ const defaultParser = <T extends z.ZodType<any>>(
     error: new Error(result.error.message),
   };
 };
-
-/**
- * Error thrown when no handler is registered for a status code
- */
-export class HandlerNotSetError extends Error {
-  constructor(code: number) {
-    super(`No handler registered for status code ${code}`);
-    this.name = 'HandlerNotSetError';
-  }
-}
-
-/**
- * Error thrown when JSON deserialization fails
- */
-export class JsonDeserializationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'JsonDeserializationError';
-  }
-}
-
-function identity<A>(a: A): A {
-  return a;
-}
-
-const unsafeCoerce: <A, B>(a: A) => B = identity as any;

@@ -1,6 +1,6 @@
 {
   "name": "@lonli-lokli/fetcher-zod",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -36,6 +36,6 @@
   ],
   "peerDependencies": {
     "zod": "^3.24.2",
-    "cross-fetch": "^4.0.0"
+    "cross-fetch": "3.0.4"
   }
 }
