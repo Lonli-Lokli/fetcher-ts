@@ -18,11 +18,11 @@ A strongly-typed fetch wrapper for TypeScript applications with runtime validati
 ## Installation
 
 ```bash
-npm install typebox-fetcher
+npm install @lonli-lokli/fetcher-typebox
 # or
-yarn add typebox-fetcher
+yarn add @lonli-lokli/fetcher-typebox
 # or
-pnpm add typebox-fetcher
+pnpm add @lonli-lokli/fetcher-typebox
 ```
 
 > Note: @sinclair/typebox is a peer dependency and must be installed separately.
