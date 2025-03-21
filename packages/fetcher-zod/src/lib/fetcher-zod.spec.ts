@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { ZodFetcher } from './fetcher-zod.js';
+import { 
+  ValidationError, 
+  JsonDeserializationError, 
+  NetworkError, 
+  ParsingError
+} from './errors.js';
 import { describe, it, expect, vi } from 'vitest';
 
 describe('ZodFetcher suite', () => {
@@ -76,7 +82,7 @@ describe('ZodFetcher suite', () => {
 
   it('should validate incorrectly shaped responses', async () => {
     type TestData = { foo: string; baz: number };
-    const ZTestData = z.object({ foo: z.string(), baz: z.number() });
+    const TestDataSchema = z.object({ foo: z.string(), baz: z.number() });
     type TestMethod = { code: 200; payload: TestData };
 
     const fetchMock = vi.fn(
@@ -93,10 +99,14 @@ describe('ZodFetcher suite', () => {
       undefined,
       fetchMock
     )
-      .handle(200, (_) => _, ZTestData)
+      .handle(200, (_) => _, TestDataSchema)
       .run();
 
     expect(errs).toBeDefined();
+    expect(errs).toBeInstanceOf(ValidationError);
+    expect(errs?.value).toBeDefined();
+    expect(errs?.schema).toBeDefined();
+    expect(errs?.validationError).toBeDefined();
   });
 
   it('should get data from headers via passed extractor', async () => {
@@ -304,5 +314,81 @@ describe('ZodFetcher suite', () => {
 
     expect(res).toStrictEqual('FALLBACK');
     expect(errs).toBeUndefined();
+  });
+
+  it('should handle JSON deserialization errors', async () => {
+    type TestMethod = { code: 200; payload: { foo: string } };
+
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
+        new Response('invalid json', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+    );
+
+    const fetcher = new ZodFetcher<TestMethod, string>(
+      '',
+      undefined,
+      undefined,
+      fetchMock
+    ).handle(200, (data) => data.foo, z.object({ foo: z.string() }));
+
+    await expect(fetcher.run()).rejects.toThrow(JsonDeserializationError);
+    const error = await fetcher.run().catch(e => e);
+    expect(error.response).toBeDefined();
+    expect(error.responseText).toBe('invalid json');
+    expect(error.cause).toBeDefined();
+  });
+
+  it('should handle handler side errors', async () => {
+    type TestMethod = { code: 200; payload: string };
+
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit | undefined) =>
+        new Response('foo', { status: 200 })
+    );
+
+    const fetcher = new ZodFetcher<TestMethod, string>(
+      '',
+      undefined,
+      undefined,
+      fetchMock
+    ).handle(
+      200,
+      () => {
+        throw new Error('Handler error');
+      },
+      z.string()
+    );
+
+    await expect(fetcher.run()).rejects.toThrow(ParsingError);
+    const error = await fetcher.run().catch(e => e);
+    expect(error.rawData).toBe('foo');
+    expect(error.handlerName).toBeDefined();
+    expect(error.cause).toBeDefined();
+  });
+
+  it('should handle fetch errors', async () => {
+    type TestMethod = { code: 200; payload: string };
+
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit | undefined) => {
+        throw new Error('Network error');
+      }
+    );
+
+    const fetcher = new ZodFetcher<TestMethod, string>(
+      '',
+      {},
+      undefined,
+      fetchMock
+    ).handle(200, (_) => _, z.string());
+
+    await expect(fetcher.run()).rejects.toThrow(NetworkError);
+    const error = await fetcher.run().catch(e => e);
+    expect(error.request).toBeDefined();
+    expect(error.requestInit).toBeDefined();
+    expect(error.cause).toBeDefined();
   });
 });

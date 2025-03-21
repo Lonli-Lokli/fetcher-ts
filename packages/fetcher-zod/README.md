@@ -1,5 +1,3 @@
-
-
 # @lonli-lokli/fetcher-zod
 
 A type-safe HTTP client for TypeScript using Zod for runtime validation.
@@ -141,7 +139,15 @@ const [userNames] = await userNamesFetcher.run(); // string[]
 ### Custom Error Handling
 
 ```typescript
-import { ZodFetcher, Result, HandlerNotSetError } from '@lonli-lokli/fetcher-zod';
+import { 
+  ZodFetcher, 
+  Result, 
+  ValidationError, 
+  JsonDeserializationError, 
+  HandlerNotSetError,
+  NetworkError,
+  ParsingError
+} from '@lonli-lokli/fetcher-zod';
 import { z } from 'zod';
 
 type ApiResponses = Result<200, { data: string }>;
@@ -165,12 +171,156 @@ try {
   const [data] = await fetcher.run();
   console.log('Success:', data);
 } catch (error) {
-  if (error instanceof HandlerNotSetError) {
-    console.error('No handler for this status code');
+  if (error instanceof ValidationError) {
+    console.error('Schema validation failed:', error.message);
+    console.error('Invalid value:', error.value);
+    console.error('Expected schema:', error.schema);
+    console.error('Validation details:', error.validationError.message);
+  } else if (error instanceof JsonDeserializationError) {
+    console.error('Failed to parse JSON response:', error.message);
+    console.error('Raw response:', error.responseText);
+  } else if (error instanceof HandlerNotSetError) {
+    console.error(`No handler for status code ${error.code}`);
+  } else if (error instanceof NetworkError) {
+    console.error('Network request failed:', error.message);
+    console.error('Request details:', {
+      url: error.request,
+      options: error.requestInit
+    });
+  } else if (error instanceof ParsingError) {
+    console.error('Error processing response data:', error.message);
+    console.error('Raw data:', error.rawData);
+    console.error('Handler name:', error.handlerName);
   } else {
     console.error('Error:', error.message);
   }
 }
+```
+
+### Error Handling with Offline Detection
+
+```typescript
+import { 
+  ZodFetcher, 
+  NetworkError 
+} from '@lonli-lokli/fetcher-zod';
+
+async function fetchWithOfflineDetection<T>(
+  url: string, 
+  options: RequestInit = {}
+): Promise<T | null> {
+  const result = await new ZodFetcher<{ code: 200; payload: T }, T>(url, options)
+    .handle(200, data => data)
+    .safeRun();
+  
+  if (result.status === 'error') {
+    if (result.error instanceof NetworkError) {
+      // Handle offline state
+      const isOffline = !navigator.onLine;
+      if (isOffline) {
+        console.log('Device is offline. Please check your connection.');
+        // Maybe update UI to show offline state
+        // Or queue request for later when back online
+      } else {
+        console.error('Network request failed despite being online:', result.error.message);
+      }
+    }
+    return null;
+  }
+  
+  return result.data;
+}
+```
+
+### Comprehensive SafeRun Example
+
+```typescript
+import { 
+  ZodFetcher, 
+  ValidationError, 
+  JsonDeserializationError, 
+  HandlerNotSetError,
+  NetworkError,
+  ParsingError
+} from '@lonli-lokli/fetcher-zod';
+import { z } from 'zod';
+
+// Define your API response types
+type ApiResponse =
+  | { code: 200; payload: User }
+  | { code: 400; payload: ErrorResponse }
+  | { code: 404; payload: null };
+
+// Define your data types and schemas
+type User = { id: number; name: string; email: string };
+type ErrorResponse = { message: string; code: string };
+
+const UserSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+});
+
+const ErrorResponseSchema = z.object({
+  message: z.string(),
+  code: z.string(),
+});
+
+async function fetchUserSafely(userId: number) {
+  const result = await new ZodFetcher<ApiResponse, User | string | null>(
+    `/api/users/${userId}`,
+    { 
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    }
+  )
+    .handle(200, user => user, UserSchema)
+    .handle(400, error => `Error: ${error.message} (${error.code})`, ErrorResponseSchema)
+    .handle(404, () => null)
+    // Handle any other status code with a custom error
+    .discardRestAsError(response => 
+      new Error(`Unexpected status code: ${response.status}`)
+    )
+    .safeRun();
+
+  // Handle all possible outcomes
+  if (result.status === 'ok') {
+    if (result.data === null) {
+      console.log('User not found');
+      return null;
+    } else if (typeof result.data === 'string') {
+      console.log('Request error:', result.data);
+      return null;
+    } else {
+      console.log('User found:', result.data);
+      return result.data;
+    }
+  } else {
+    // Type-specific error handling
+    if (result.error instanceof ValidationError) {
+      console.error('Response validation failed:', result.error.message);
+      // You can access the original validation error
+      const originalError = result.error.validationError;
+      console.error('Validation details:', originalError.message);
+    } else if (result.error instanceof JsonDeserializationError) {
+      console.error('Failed to parse JSON response:', result.error.message);
+    } else if (result.error instanceof HandlerNotSetError) {
+      console.error(`No handler defined for status code: ${result.error.message}`);
+    } else if (result.error instanceof NetworkError) {
+      console.error('Network connection failed:', result.error.message);
+      // Handle offline state or retry logic
+    } else if (result.error instanceof ParsingError) {
+      console.error('Error processing response data:', result.error.message);
+      // Handle data processing errors
+    } else {
+      console.error('Request failed:', result.error.message);
+    }
+    return null;
+  }
+}
+
+// Usage
+const user = await fetchUserSafely(123);
 ```
 
 ## API Reference

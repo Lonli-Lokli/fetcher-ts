@@ -225,6 +225,8 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
         (error) => {
           throw new NetworkError(
             `Network request failed: ${error.message}`,
+            this.input,
+            this.init,
             error
           );
         }
@@ -236,6 +238,7 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
       if (triplet != null) {
         const [handler, schema, extractor] = triplet;
 
+        const clone = response.clone();
         try {
           const body = await extractor(response);
 
@@ -254,13 +257,28 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
             return [handler(body), undefined];
           } catch (error) {
             return Promise.reject(
-              new ParsingError(`Handler side error, details: ${error}`)
+              new ParsingError(
+                `Handler side error, details: ${error}`,
+                body,
+                handler.name || 'anonymous',
+                error instanceof Error ? error : undefined
+              )
             );
           }
         } catch (jsonError) {
+          let responseText: string | undefined;
+          try {
+           responseText = await clone.text();
+          } catch {
+            // Ignore error getting response text
+          }
+          
           return Promise.reject(
             new JsonDeserializationError(
-              `Could not deserialize response JSON, details: ${jsonError}`
+              `Could not deserialize response JSON`,
+              response,
+              responseText,
+              jsonError instanceof Error ? jsonError : undefined
             )
           );
         }
@@ -312,12 +330,10 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
 
       return ok(data);
     } catch (error) {
-      // Preserve our custom error types
       if (error instanceof FetcherError) {
         return err(error);
       }
-      // Wrap unknown errors
-      return err(error instanceof Error ? error : new Error(String(error)));
+      return err(new FetcherError(String(error), error instanceof Error ? error : undefined));
     }
   }
 }
@@ -351,7 +367,7 @@ const defaultParser = <T extends TSchema>(
   const firstError = compiledSchema.Errors(value).First();
   return {
     success: false,
-    error: new ValidationError(value, firstError),
+    error: new ValidationError(value, firstError, schema),
   };
 };
 

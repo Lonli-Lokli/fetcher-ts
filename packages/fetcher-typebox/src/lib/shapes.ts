@@ -55,6 +55,10 @@ export interface Validator<T> {
   decode(data: unknown): ValidationResult<T>;
 }
 
-export type ParsedResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: ValidationError };
+export type ParsedResult<T> = {
+  success: true;
+  data: T;
+} | {
+  success: false;
+  error: ValidationError;
+};

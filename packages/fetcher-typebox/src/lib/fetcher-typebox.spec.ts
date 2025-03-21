@@ -1,5 +1,11 @@
 import { Type } from '@sinclair/typebox';
 import { TypeboxFetcher } from './fetcher-typebox.js';
+import { 
+  ValidationError, 
+  JsonDeserializationError, 
+  NetworkError, 
+  ParsingError
+} from './errors.js';
 import { describe, it, expect, vi } from 'vitest';
 
 describe('TypeboxFetcher suite', () => {
@@ -97,6 +103,10 @@ describe('TypeboxFetcher suite', () => {
       .run();
 
     expect(errs).toBeDefined();
+    expect(errs).toBeInstanceOf(ValidationError);
+    expect(errs?.value).toBeDefined();
+    expect(errs?.schema).toBeDefined();
+    expect(errs?.validationError).toBeDefined();
   });
 
   it('should get data from headers via passed extractor', async () => {
@@ -251,9 +261,11 @@ describe('TypeboxFetcher suite', () => {
       fetchMock
     ).handle(200, (data) => data.foo, Type.Object({ foo: Type.String() }));
 
-    await expect(fetcher.run()).rejects.toThrow(
-      'Could not deserialize response JSON'
-    );
+    await expect(fetcher.run()).rejects.toThrow(JsonDeserializationError);
+    const error = await fetcher.run().catch(e => e);
+    expect(error.response).toBeDefined();
+    expect(error.responseText).toBe('invalid json');
+    expect(error.cause).toBeDefined();
   });
 
   it('should handle handler side errors', async () => {
@@ -277,7 +289,11 @@ describe('TypeboxFetcher suite', () => {
       Type.String()
     );
 
-    await expect(fetcher.run()).rejects.toThrow('Handler side error');
+    await expect(fetcher.run()).rejects.toThrow(ParsingError);
+    const error = await fetcher.run().catch(e => e);
+    expect(error.rawData).toBe('foo');
+    expect(error.handlerName).toBeDefined();
+    expect(error.cause).toBeDefined();
   });
 
   it('should handle fetch errors', async () => {
@@ -291,12 +307,16 @@ describe('TypeboxFetcher suite', () => {
 
     const fetcher = new TypeboxFetcher<TestMethod, string>(
       '',
-      undefined,
+      {},
       undefined,
       fetchMock
     ).handle(200, (_) => _, Type.String());
 
-    await expect(fetcher.run()).rejects.toThrow('Network error');
+    await expect(fetcher.run()).rejects.toThrow(NetworkError);
+    const error = await fetcher.run().catch(e => e);
+    expect(error.request).toBeDefined();
+    expect(error.requestInit).toBeDefined();
+    expect(error.cause).toBeDefined();
   });
 
   it('should handle map transformation', async () => {

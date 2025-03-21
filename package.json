@@ -4,9 +4,9 @@
   "license": "MIT",
   "scripts": {
     "nx": "nx",
-    "lint": "nx lint",
-    "test": "nx test",
-    "release": "nx release --skip-publish"
+    "lint": "nx run-many -t lint",
+    "test": "nx run-many -t test",
+    "release": "npm run lint && npm run test && nx release --skip-publish"
   },
   "private": true,
   "dependencies": {},

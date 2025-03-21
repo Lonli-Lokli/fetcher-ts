@@ -1,9 +1,31 @@
-import crossFetch  from 'cross-fetch';
+import crossFetch from 'cross-fetch';
 import { z } from 'zod';
-import { jsonExtractor, ok, textExtractor, unsafeCoerce, err } from './helpers.js';
-import { Data, Extractor, Fetch, Handled, HandlersMap, ParsedResult, Result, SafeResult, StrictSchema } from './shapes.js';
-import { HandlerNotSetError, JsonDeserializationError, ValidationError } from './errors.js';
-
+import {
+  jsonExtractor,
+  ok,
+  textExtractor,
+  unsafeCoerce,
+  err,
+} from './helpers.js';
+import {
+  Data,
+  Extractor,
+  Fetch,
+  Handled,
+  HandlersMap,
+  ParsedResult,
+  Result,
+  SafeResult,
+  StrictSchema,
+} from './shapes.js';
+import {
+  HandlerNotSetError,
+  JsonDeserializationError,
+  ValidationError,
+  ParsingError,
+  NetworkError,
+  FetcherError,
+} from './errors.js';
 
 export const defaultExtractor = (response: Response) => {
   const contentType = response.headers.get('content-type');
@@ -15,17 +37,17 @@ export const defaultExtractor = (response: Response) => {
 
 /**
  * A type-safe HTTP client with Zod validation
- * 
+ *
  * @template TResult The union type of possible API responses (e.g., Result<200, User> | Result<404, string>)
  * @template To The return type after processing the response
- * 
+ *
  * @example
  * ```typescript
- * type ApiResponse = 
+ * type ApiResponse =
  *   | Result<200, User>
  *   | Result<400, string>
  *   | Result<404, null>;
- * 
+ *
  * const fetcher = new ZodFetcher<ApiResponse, string>('/api/users/1')
  *   .handle(200, user => `Found: ${user.name}`, UserSchema)
  *   .handle(400, error => `Error: ${error}`)
@@ -40,17 +62,17 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
 
   /**
    * Creates a new ZodFetcher instance
-   * 
+   *
    * @param input The URL or Request object to fetch
    * @param init Optional fetch init options
    * @param parser Custom parser function (defaults to Zod validation)
    * @param fetch Custom fetch implementation (defaults to cross-fetch)
-   * 
+   *
    * @example
    * ```typescript
    * const fetcher = new ZodFetcher<ApiResponse, User>(
    *   'https://api.example.com/users/1',
-   *   { 
+   *   {
    *     method: 'GET',
    *     headers: { 'Authorization': 'Bearer token123' }
    *   }
@@ -77,10 +99,10 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
    * @param schema Optional Zod schema for validation
    * @param extractor Optional custom response extractor
    * @returns A new ZodFetcher with the handler registered
-   * 
+   *
    * @example
    * ```typescript
-   * fetcher.handle(200, 
+   * fetcher.handle(200,
    *   user => `User: ${user.name}`,
    *   z.object({
    *     id: z.number(),
@@ -106,7 +128,7 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
    *
    * @param restErrorHandler Function that returns an Error for unhandled status codes
    * @returns A new ZodFetcher with all status codes handled
-   * 
+   *
    * @example
    * ```typescript
    * fetcher.discardRestAsError(
@@ -127,7 +149,7 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
    *
    * @param restToHandler Function that returns a default value for unhandled status codes
    * @returns A new ZodFetcher with all status codes handled
-   * 
+   *
    * @example
    * ```typescript
    * fetcher.discardRestAsTo(
@@ -145,11 +167,11 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
 
   /**
    * Transform the result of this fetcher
-   * 
+   *
    * @template B The new return type
    * @param fn Transformation function
    * @returns A new ZodFetcher with transformed output
-   * 
+   *
    * @example
    * ```typescript
    * const userFetcher = fetcher.handle(200, user => user, UserSchema);
@@ -164,16 +186,19 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
       this.parser,
       this.fetch
     );
-    
+
     // Copy handlers with transformed output
-    for (const [code, [handler, schema, extractor]] of this.handlers.entries()) {
+    for (const [
+      code,
+      [handler, schema, extractor],
+    ] of this.handlers.entries()) {
       (newFetcher.handlers as any).set(code, [
         (data: any) => fn(handler(data)),
         schema,
         extractor,
       ]);
     }
-    
+
     // Transform rest handlers if they exist
     if (this.restToHandler) {
       newFetcher.restToHandler = () => fn(this.restToHandler!());
@@ -181,7 +206,7 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
     if (this.restErrorHandler) {
       newFetcher.restErrorHandler = this.restErrorHandler;
     }
-    
+
     return newFetcher;
   }
 
@@ -189,7 +214,7 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
    * Execute the HTTP request and process the response
    *
    * @returns A promise of a tuple containing the result and any validation errors
-   * 
+   *
    * @example
    * ```typescript
    * const [user, errors] = await fetcher.run();
@@ -200,7 +225,7 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
    * }
    * ```
    */
-  async run(): Promise<[To, Error | undefined]> {
+  async run(): Promise<[To, ValidationError | undefined]> {
     try {
       const response = await this.fetch(this.input, this.init);
 
@@ -209,7 +234,7 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
 
       if (triplet != null) {
         const [handler, schema, extractor] = triplet;
-
+        const clone = response.clone();
         try {
           const body = await extractor(response);
 
@@ -217,7 +242,15 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
             if (schema) {
               const parsedResult = this.parser(schema, body);
               if (parsedResult.success === false) {
-                return [handler(body), parsedResult.error];
+                return [
+                  handler(body),
+                  new ValidationError(
+                    `Validation failed: ${parsedResult.error.message}`,
+                    body,
+                    schema,
+                    parsedResult.error
+                  ),
+                ];
               }
               return [
                 handler(parsedResult.data as Data<TResult, TResult['code']>),
@@ -228,13 +261,28 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
             return [handler(body), undefined];
           } catch (error) {
             return Promise.reject(
-              new Error(`Handler side error, details: ${error}`)
+              new ParsingError(
+                `Handler execution failed: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+                body,
+                handler.name || 'anonymous',
+                error
+              )
             );
           }
         } catch (jsonError) {
+          const responseText = await clone.text();
           return Promise.reject(
             new JsonDeserializationError(
-              `Could not deserialize response JSON, details: ${jsonError}`
+              `Could not deserialize response JSON: ${
+                jsonError instanceof Error
+                  ? jsonError.message
+                  : String(jsonError)
+              }`,
+              response,
+              responseText,
+              jsonError
             )
           );
         }
@@ -250,7 +298,19 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
 
       return Promise.reject(new HandlerNotSetError(status));
     } catch (error) {
-      return Promise.reject(error);
+      if (error instanceof FetcherError) {
+        return Promise.reject(error);
+      }
+      return Promise.reject(
+        new NetworkError(
+          `Network request failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          this.input,
+          this.init,
+          error
+        )
+      );
     }
   }
 
@@ -281,19 +341,21 @@ export class ZodFetcher<TResult extends Result<any, any>, To> {
       const [data, validationError] = await this.run();
 
       if (validationError) {
-        return err(new ValidationError(validationError));
+        return err(validationError);
       }
 
       return ok(data);
     } catch (error) {
-      return err(error instanceof Error ? error : new Error(String(error)));
+      return err(
+        error instanceof Error ? error : new FetcherError(String(error))
+      );
     }
   }
 }
 
 /**
  * Default parser for Zod schemas
- * 
+ *
  * @param schema The Zod schema to validate against
  * @param value The value to validate
  * @returns A parsed result with either the validated data or an error
@@ -303,14 +365,14 @@ const defaultParser = <T extends z.ZodType<any>>(
   value: unknown
 ): ParsedResult<z.infer<T>> => {
   const result = schema.safeParse(value);
-  
+
   if (result.success) {
     return {
       success: true,
       data: result.data,
     };
   }
-  
+
   return {
     success: false,
     error: new Error(result.error.message),
