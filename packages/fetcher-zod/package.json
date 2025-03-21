@@ -1,6 +1,6 @@
 {
   "name": "@lonli-lokli/fetcher-zod",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

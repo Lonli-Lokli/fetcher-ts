@@ -1,3 +1,5 @@
+import { ValueError } from "@sinclair/typebox/errors";
+
 export class FetcherError extends Error {
   constructor(message: string, cause?: Error) {
     super(message, { cause });
@@ -22,8 +24,8 @@ export class JsonDeserializationError extends FetcherError {
 }
 
 export class ValidationError extends FetcherError {
-  constructor(public readonly validationErrors: Error) {
-    super(`Validation failed: ${validationErrors.message}`);
+  constructor(public readonly value: any, public readonly validationError: ValueError | undefined) {
+    super(`Validation failed: ${validationError?.message ?? 'Unknown error'}`);
     this.name = 'ValidationError';
   }
 }

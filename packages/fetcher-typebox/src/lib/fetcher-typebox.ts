@@ -10,7 +10,13 @@ import {
   ParsingError,
   FetcherError,
 } from './errors.js';
-import { jsonExtractor, textExtractor, unsafeCoerce,  ok, err } from './helpers.js';
+import {
+  jsonExtractor,
+  textExtractor,
+  unsafeCoerce,
+  ok,
+  err,
+} from './helpers.js';
 import {
   Data,
   Extractor,
@@ -20,9 +26,8 @@ import {
   StrictSchema,
   Result,
   SafeResult,
-  ParsedResult
+  ParsedResult,
 } from './shapes.js';
-
 
 /**
  * A type-safe HTTP client with TypeBox validation
@@ -214,11 +219,16 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
    * }
    * ```
    */
-  async run(): Promise<[To, Error | undefined]> {
+  async run(): Promise<[To, ValidationError | undefined]> {
     try {
-      const response = await this.fetch(this.input, this.init).catch(error => {
-        throw new NetworkError(`Network request failed: ${error.message}`, error);
-      });
+      const response = await this.fetch(this.input, this.init).catch(
+        (error) => {
+          throw new NetworkError(
+            `Network request failed: ${error.message}`,
+            error
+          );
+        }
+      );
 
       const status = response.status as TResult['code'];
       const triplet = this.handlers.get(status);
@@ -297,13 +307,13 @@ export class TypeboxFetcher<TResult extends Result<any, any>, To> {
       const [data, validationError] = await this.run();
 
       if (validationError) {
-        return err(new ValidationError(validationError));
+        return err(validationError);
       }
 
       return ok(data);
     } catch (error) {
       // Preserve our custom error types
-      if (error instanceof FetcherError ) {
+      if (error instanceof FetcherError) {
         return err(error);
       }
       // Wrap unknown errors
@@ -341,9 +351,7 @@ const defaultParser = <T extends TSchema>(
   const firstError = compiledSchema.Errors(value).First();
   return {
     success: false,
-    error: new Error(
-      `Error at ${firstError?.path}: ${firstError?.message}, got ${value}`
-    ),
+    error: new ValidationError(value, firstError),
   };
 };
 

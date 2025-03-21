@@ -183,7 +183,7 @@ async function fetchUserSafely(userId: number) {
     if (result.error instanceof ValidationError) {
       console.error('Response validation failed:', result.error.message);
       // You can access the original validation error
-      const originalError = result.error.validationErrors;
+      const originalError = result.error.validationError;
       console.error('Validation details:', originalError.message);
     } else if (result.error instanceof JsonDeserializationError) {
       console.error('Failed to parse JSON response:', result.error.message);

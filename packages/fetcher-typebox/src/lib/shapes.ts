@@ -1,6 +1,6 @@
 import { Static, TSchema } from '@sinclair/typebox';
 import crossFetch from 'cross-fetch';
-import { FetcherError } from './errors.js';
+import { FetcherError, ValidationError } from './errors.js';
 
 export type SafeResult<T> = OkResult<T> | ErrorResult;
 
@@ -57,4 +57,4 @@ export interface Validator<T> {
 
 export type ParsedResult<T> =
   | { success: true; data: T }
-  | { success: false; error: Error };
+  | { success: false; error: ValidationError };
